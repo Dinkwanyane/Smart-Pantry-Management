@@ -1,4 +1,3 @@
-
 package com.example.smartpantrymanagement;
 
 import android.content.ContentValues;
@@ -7,10 +6,13 @@ import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
 import android.database.sqlite.SQLiteOpenHelper;
 
+import java.util.ArrayList;
+import java.util.List;
+
 public class DatabaseHelper extends SQLiteOpenHelper {
 
     private static final String DATABASE_NAME = "smart_pantry.db";
-    private static final int DATABASE_VERSION = 1;
+    private static final int DATABASE_VERSION = 2;
 
     public static final String TABLE_PANTRY = "pantry_items";
     public static final String TABLE_RECIPES = "recipes";
@@ -29,6 +31,7 @@ public class DatabaseHelper extends SQLiteOpenHelper {
 
     @Override
     public void onCreate(SQLiteDatabase db) {
+
         db.execSQL(
                 "CREATE TABLE " + TABLE_PANTRY + " (" +
                         "id INTEGER PRIMARY KEY AUTOINCREMENT, " +
@@ -61,20 +64,27 @@ public class DatabaseHelper extends SQLiteOpenHelper {
     }
 
     @Override
-    public void onUpgrade(SQLiteDatabase db,
-                          int oldVersion, int newVersion) {
-        // Add migrations here if the database structure changes.
-        // Do not delete existing tables during an upgrade.
+    public void onUpgrade(
+            SQLiteDatabase db, int oldVersion, int newVersion) {
+
+        if (oldVersion < 2) {
+            seedRecipes(db);
+        }
     }
 
-    // -------------------- PANTRY: CREATE --------------------
+    // =========================================================
+    // PANTRY: CREATE
+    // =========================================================
 
-    public long addPantryItem(String name, double quantity,
-                              String unit, String expiryDate) {
+    public long addPantryItem(
+            String name,
+            double quantity,
+            String unit,
+            String expiryDate) {
 
         if (name == null || name.trim().isEmpty()
                 || unit == null || unit.trim().isEmpty()
-                || quantity <= 0) {
+                || !Double.isFinite(quantity) || quantity <= 0) {
             return -1;
         }
 
@@ -88,8 +98,11 @@ public class DatabaseHelper extends SQLiteOpenHelper {
                 TABLE_PANTRY, null, values);
     }
 
-    // -------------------- PANTRY: READ --------------------
+    // =========================================================
+    // PANTRY: READ
+    // =========================================================
 
+    // Retained for existing screens that use a Cursor.
     public Cursor getAllPantryItems() {
         return getReadableDatabase().query(
                 TABLE_PANTRY,
@@ -103,6 +116,7 @@ public class DatabaseHelper extends SQLiteOpenHelper {
     }
 
     public PantryItem getPantryItem(int id) {
+
         try (Cursor cursor = getReadableDatabase().query(
                 TABLE_PANTRY,
                 null,
@@ -113,28 +127,57 @@ public class DatabaseHelper extends SQLiteOpenHelper {
                 null)) {
 
             if (cursor.moveToFirst()) {
-                return new PantryItem(
-                        cursor.getInt(cursor.getColumnIndexOrThrow("id")),
-                        cursor.getString(cursor.getColumnIndexOrThrow("name")),
-                        cursor.getDouble(cursor.getColumnIndexOrThrow("quantity")),
-                        cursor.getString(cursor.getColumnIndexOrThrow("unit")),
-                        cursor.getString(cursor.getColumnIndexOrThrow("expiry_date"))
-                );
+                return pantryItemFromCursor(cursor);
             }
         }
 
         return null;
     }
 
-    // -------------------- PANTRY: UPDATE --------------------
+    private PantryItem pantryItemFromCursor(Cursor cursor) {
 
-    public int updatePantryItem(int id, String name,
-                                double quantity, String unit,
-                                String expiryDate) {
+        return new PantryItem(
+                cursor.getInt(
+                        cursor.getColumnIndexOrThrow("id")),
+                cursor.getString(
+                        cursor.getColumnIndexOrThrow("name")),
+                cursor.getDouble(
+                        cursor.getColumnIndexOrThrow("quantity")),
+                cursor.getString(
+                        cursor.getColumnIndexOrThrow("unit")),
+                cursor.getString(
+                        cursor.getColumnIndexOrThrow("expiry_date"))
+        );
+    }
+
+    // Convert pantry database rows into PantryItem objects.
+    private List<PantryItem> loadPantryItems() {
+
+        List<PantryItem> pantry = new ArrayList<>();
+
+        try (Cursor cursor = getAllPantryItems()) {
+            while (cursor.moveToNext()) {
+                pantry.add(pantryItemFromCursor(cursor));
+            }
+        }
+
+        return pantry;
+    }
+
+    // =========================================================
+    // PANTRY: UPDATE
+    // =========================================================
+
+    public int updatePantryItem(
+            int id,
+            String name,
+            double quantity,
+            String unit,
+            String expiryDate) {
 
         if (name == null || name.trim().isEmpty()
                 || unit == null || unit.trim().isEmpty()
-                || quantity <= 0) {
+                || !Double.isFinite(quantity) || quantity <= 0) {
             return 0;
         }
 
@@ -152,7 +195,9 @@ public class DatabaseHelper extends SQLiteOpenHelper {
         );
     }
 
-    // -------------------- PANTRY: DELETE --------------------
+    // =========================================================
+    // PANTRY: DELETE
+    // =========================================================
 
     public int deletePantryItem(int id) {
         return getWritableDatabase().delete(
@@ -162,8 +207,11 @@ public class DatabaseHelper extends SQLiteOpenHelper {
         );
     }
 
-    // -------------------- RECIPE QUERIES --------------------
+    // =========================================================
+    // RECIPES: READ
+    // =========================================================
 
+    // Retained for existing screens that use a Cursor.
     public Cursor getAllRecipes() {
         return getReadableDatabase().query(
                 TABLE_RECIPES,
@@ -188,6 +236,101 @@ public class DatabaseHelper extends SQLiteOpenHelper {
         );
     }
 
+    private Recipe recipeFromCursor(Cursor cursor) {
+
+        return new Recipe(
+                cursor.getInt(
+                        cursor.getColumnIndexOrThrow("id")),
+                cursor.getString(
+                        cursor.getColumnIndexOrThrow("name")),
+                cursor.getString(
+                        cursor.getColumnIndexOrThrow("steps"))
+        );
+    }
+
+    private List<Recipe> loadRecipes() {
+
+        List<Recipe> recipes = new ArrayList<>();
+
+        try (Cursor cursor = getAllRecipes()) {
+            while (cursor.moveToNext()) {
+                recipes.add(recipeFromCursor(cursor));
+            }
+        }
+
+        return recipes;
+    }
+
+    // =========================================================
+    // COMMIT 9: STRICT RECIPE MATCHING
+    // =========================================================
+
+    public List<Recipe> getSuggestedRecipes() {
+
+        List<Recipe> suggestedRecipes = new ArrayList<>();
+
+        // Step 1: Read pantry rows and convert them into objects.
+        List<PantryItem> pantry = loadPantryItems();
+
+        // Step 2: Read all saved recipes.
+        List<Recipe> recipes = loadRecipes();
+
+        SQLiteDatabase db = getReadableDatabase();
+
+        // Step 3: Check every recipe.
+        for (Recipe recipe : recipes) {
+
+            List<RecipeMatcher.Requirement> requirements =
+                    new ArrayList<>();
+
+            // Load the ingredients belonging to this recipe only.
+            try (Cursor cursor = db.query(
+                    TABLE_RECIPE_INGREDIENTS,
+                    new String[]{"name", "quantity", "unit"},
+                    "recipe_id = ?",
+                    new String[]{String.valueOf(recipe.getId())},
+                    null,
+                    null,
+                    "name COLLATE NOCASE ASC")) {
+
+                while (cursor.moveToNext()) {
+
+                    String name = cursor.getString(
+                            cursor.getColumnIndexOrThrow("name"));
+
+                    double quantity = cursor.getDouble(
+                            cursor.getColumnIndexOrThrow("quantity"));
+
+                    String unit = cursor.getString(
+                            cursor.getColumnIndexOrThrow("unit"));
+
+                    requirements.add(
+                            new RecipeMatcher.Requirement(
+                                    name, quantity, unit));
+                }
+            }
+
+            // Never suggest a recipe with no requirements.
+            if (requirements.isEmpty()) {
+                continue;
+            }
+
+            // Step 4: Add only complete matches.
+            if (RecipeMatcher.canMakeRecipe(
+                    pantry, requirements)) {
+
+                suggestedRecipes.add(recipe);
+            }
+        }
+
+        // Step 5: Return complete matches only.
+        return suggestedRecipes;
+    }
+
+    // =========================================================
+    // DATABASE COUNTS
+    // =========================================================
+
     public int getRecipeCount() {
         return getCount(TABLE_RECIPES);
     }
@@ -201,10 +344,12 @@ public class DatabaseHelper extends SQLiteOpenHelper {
     }
 
     private int getCount(String tableName) {
+
         String sql = "SELECT COUNT(*) FROM " + tableName;
 
         try (Cursor cursor =
                      getReadableDatabase().rawQuery(sql, null)) {
+
             if (cursor.moveToFirst()) {
                 return cursor.getInt(0);
             }
@@ -213,34 +358,56 @@ public class DatabaseHelper extends SQLiteOpenHelper {
         return 0;
     }
 
-    // -------------------- INITIAL RECIPE DATA --------------------
+    // =========================================================
+    // INITIAL RECIPE DATA
+    // =========================================================
 
     private void seedRecipes(SQLiteDatabase db) {
 
         String[][] recipes = {
-                {"Tomato Omelette", "Beat eggs, chop tomato, and cook together."},
-                {"Cheese Omelette", "Beat eggs with cheese and cook in a pan."},
-                {"Garlic Pasta", "Cook pasta and mix with fried garlic and oil."},
-                {"Tomato Pasta", "Cook pasta and mix with tomato and garlic sauce."},
-                {"Potato Mash", "Boil potatoes and mash with milk and butter."},
-                {"Vegetable Soup", "Chop vegetables, simmer until soft, and season."},
-                {"Carrot Salad", "Grate carrots and mix with lemon juice and oil."},
-                {"Egg Fried Rice", "Scramble eggs and stir-fry with cooked rice."},
-                {"Garlic Rice", "Fry garlic in oil and stir in cooked rice."},
-                {"Cheese Toast", "Put cheese on bread and toast until melted."},
-                {"Banana Pancakes", "Mash banana, mix with egg and flour, then fry."},
-                {"Apple Oatmeal", "Cook oats in milk and add chopped apple."},
-                {"Potato Wedges", "Cut potatoes, coat with oil, season, and bake."},
-                {"Onion Omelette", "Mix chopped onion with beaten eggs and cook."},
-                {"Carrot Soup", "Boil carrots and onion, then blend until smooth."},
-                {"Tomato Sandwich", "Place sliced tomato and butter on bread."},
-                {"Cheese Pasta", "Cook pasta and stir in cheese and milk."},
-                {"Apple Pancakes", "Mix chopped apple into pancake batter and cook."},
-                {"Garlic Toast", "Spread garlic butter on bread and toast."},
-                {"Vegetable Rice", "Cook rice and mix with fried carrot and onion."}
+                {"Tomato Omelette",
+                        "Beat eggs, chop tomato, and cook together."},
+                {"Cheese Omelette",
+                        "Beat eggs with cheese and cook in a pan."},
+                {"Garlic Pasta",
+                        "Cook pasta and mix with fried garlic and oil."},
+                {"Tomato Pasta",
+                        "Cook pasta and mix with tomato and garlic sauce."},
+                {"Potato Mash",
+                        "Boil potatoes and mash with milk and butter."},
+                {"Vegetable Soup",
+                        "Chop vegetables, simmer until soft, and season."},
+                {"Carrot Salad",
+                        "Grate carrots and mix with lemon juice and oil."},
+                {"Egg Fried Rice",
+                        "Scramble eggs and stir-fry with cooked rice."},
+                {"Garlic Rice",
+                        "Fry garlic in oil and stir in cooked rice."},
+                {"Cheese Toast",
+                        "Put cheese on bread and toast until melted."},
+                {"Banana Pancakes",
+                        "Mash banana, mix with egg and flour, then fry."},
+                {"Apple Oatmeal",
+                        "Cook oats in milk and add chopped apple."},
+                {"Potato Wedges",
+                        "Cut potatoes, coat with oil, season, and bake."},
+                {"Onion Omelette",
+                        "Mix chopped onion with beaten eggs and cook."},
+                {"Carrot Soup",
+                        "Boil carrots and onion, then blend until smooth."},
+                {"Tomato Sandwich",
+                        "Place sliced tomato and butter on bread."},
+                {"Cheese Pasta",
+                        "Cook 100g pasta and stir in 30.0g of cheese and 50.0ml of milk."},
+                {"Apple Pancakes",
+                        "Mix chopped apple into pancake batter and cook."},
+                {"Garlic Toast",
+                        "Spread garlic butter on bread and toast."},
+                {"Vegetable Rice",
+                        "Cook rice and mix with fried carrot and onion."}
         };
 
-        // Columns: recipe index, name, quantity, unit.
+        // Each row: recipe index, ingredient, quantity, unit.
         Object[][] ingredients = {
                 {0, "Eggs", 2.0, "piece"},
                 {0, "Tomato", 1.0, "piece"},
@@ -300,50 +467,72 @@ public class DatabaseHelper extends SQLiteOpenHelper {
                 {19, "Onion", 1.0, "piece"}
         };
 
-        long[] recipeIds = new long[recipes.length];
 
         db.beginTransaction();
 
         try {
-            for (int i = 0; i < recipes.length; i++) {
+            // Insert missing recipes without duplicating existing ones.
+            for (String[] recipe : recipes) {
                 ContentValues values = new ContentValues();
-                values.put("name", recipes[i][0]);
-                values.put("steps", recipes[i][1]);
+                values.put("name", recipe[0]);
+                values.put("steps", recipe[1]);
 
-                long id = db.insert(TABLE_RECIPES, null, values);
-
-                if (id == -1) {
-                    throw new IllegalStateException(
-                            "Could not seed recipe: " + recipes[i][0]);
-                }
-
-                recipeIds[i] = id;
+                db.insertWithOnConflict(
+                        TABLE_RECIPES,
+                        null,
+                        values,
+                        SQLiteDatabase.CONFLICT_IGNORE
+                );
             }
 
+            // Find each recipe's real database ID and insert its ingredients.
             for (Object[] item : ingredients) {
                 int recipeIndex = (Integer) item[0];
-                String name = (String) item[1];
+                String recipeName = recipes[recipeIndex][0];
+                String ingredientName = (String) item[1];
                 double quantity = (Double) item[2];
                 String unit = (String) item[3];
 
+                long recipeId = -1;
+
+                try (Cursor cursor = db.query(
+                        TABLE_RECIPES,
+                        new String[]{"id"},
+                        "name = ?",
+                        new String[]{recipeName},
+                        null,
+                        null,
+                        null)) {
+
+                    if (cursor.moveToFirst()) {
+                        recipeId = cursor.getLong(0);
+                    }
+                }
+
+                if (recipeId == -1) {
+                    throw new IllegalStateException(
+                            "Recipe not found: " + recipeName);
+                }
+
                 ContentValues values = new ContentValues();
-                values.put("recipe_id", recipeIds[recipeIndex]);
-                values.put("name", name);
+                values.put("recipe_id", recipeId);
+                values.put("name", ingredientName);
                 values.put("quantity", quantity);
                 values.put("unit", unit);
 
-                long id = db.insert(
-                        TABLE_RECIPE_INGREDIENTS, null, values);
-
-                if (id == -1) {
-                    throw new IllegalStateException(
-                            "Could not seed ingredient: " + name);
-                }
+                db.insertWithOnConflict(
+                        TABLE_RECIPE_INGREDIENTS,
+                        null,
+                        values,
+                        SQLiteDatabase.CONFLICT_IGNORE
+                );
             }
 
             db.setTransactionSuccessful();
+
         } finally {
             db.endTransaction();
         }
+
     }
 }

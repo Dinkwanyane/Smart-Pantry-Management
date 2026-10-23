@@ -24,9 +24,15 @@ import java.util.List;
 public class MainActivity extends AppCompatActivity {
 
     private DatabaseHelper databaseHelper;
+
     private PantryAdapter pantryAdapter;
+    private RecipeAdapter recipeAdapter;
+
     private RecyclerView recyclerPantry;
+    private RecyclerView recyclerRecipes;
+
     private TextView textEmptyPantry;
+    private TextView textEmptyRecipes;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -57,11 +63,16 @@ public class MainActivity extends AppCompatActivity {
             );
         }
 
+        databaseHelper = new DatabaseHelper(this);
+
         Button buttonAddIngredient =
                 findViewById(R.id.buttonAddIngredient);
 
         recyclerPantry = findViewById(R.id.recyclerPantry);
         textEmptyPantry = findViewById(R.id.textEmptyPantry);
+
+        recyclerRecipes = findViewById(R.id.recyclerRecipes);
+        textEmptyRecipes = findViewById(R.id.textEmptyRecipes);
 
         recyclerPantry.setLayoutManager(
                 new LinearLayoutManager(this)
@@ -74,7 +85,12 @@ public class MainActivity extends AppCompatActivity {
 
         recyclerPantry.setAdapter(pantryAdapter);
 
-        databaseHelper = new DatabaseHelper(this);
+        recyclerRecipes.setLayoutManager(
+                new LinearLayoutManager(this)
+        );
+
+        recipeAdapter = new RecipeAdapter(this::showRecipeDetails);
+        recyclerRecipes.setAdapter(recipeAdapter);
 
         buttonAddIngredient.setOnClickListener(v -> {
             Intent intent = new Intent(
@@ -86,6 +102,7 @@ public class MainActivity extends AppCompatActivity {
         });
 
         loadPantryItems();
+        loadRecipeSuggestions();
     }
 
     private void openEditIngredient(PantryItem item) {
@@ -118,9 +135,7 @@ public class MainActivity extends AppCompatActivity {
 
     private void deleteIngredient(PantryItem item) {
         try {
-            int result = databaseHelper.deletePantryItem(
-                    item.getId()
-            );
+            int result = databaseHelper.deletePantryItem(item.getId());
 
             if (result > 0) {
                 Toast.makeText(
@@ -130,6 +145,8 @@ public class MainActivity extends AppCompatActivity {
                 ).show();
 
                 loadPantryItems();
+                loadRecipeSuggestions();
+
             } else {
                 Toast.makeText(
                         this,
@@ -139,11 +156,7 @@ public class MainActivity extends AppCompatActivity {
             }
 
         } catch (Exception e) {
-            Log.e(
-                    "MainActivity",
-                    "Error deleting ingredient",
-                    e
-            );
+            Log.e("MainActivity", "Error deleting ingredient", e);
 
             Toast.makeText(
                     this,
@@ -179,15 +192,13 @@ public class MainActivity extends AppCompatActivity {
                         cursor.getColumnIndexOrThrow("expiry_date")
                 );
 
-                PantryItem item = new PantryItem(
+                items.add(new PantryItem(
                         id,
                         name,
                         quantity,
                         unit,
                         expiryDate
-                );
-
-                items.add(item);
+                ));
             }
 
             pantryAdapter.setPantryItems(items);
@@ -203,11 +214,7 @@ public class MainActivity extends AppCompatActivity {
             );
 
         } catch (Exception e) {
-            Log.e(
-                    "MainActivity",
-                    "Error loading pantry items",
-                    e
-            );
+            Log.e("MainActivity", "Error loading pantry items", e);
 
             Toast.makeText(
                     this,
@@ -217,12 +224,68 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
+    private void loadRecipeSuggestions() {
+        try {
+            List<Recipe> suggestions =
+                    databaseHelper.getSuggestedRecipes();
+
+            recipeAdapter.setRecipes(suggestions);
+
+            boolean noSuggestions =
+                    suggestions == null || suggestions.isEmpty();
+
+            textEmptyRecipes.setVisibility(
+                    noSuggestions ? View.VISIBLE : View.GONE
+            );
+
+            recyclerRecipes.setVisibility(
+                    noSuggestions ? View.GONE : View.VISIBLE
+            );
+
+        } catch (Exception e) {
+            Log.e(
+                    "MainActivity",
+                    "Error loading recipe suggestions",
+                    e
+            );
+
+            recipeAdapter.setRecipes(new ArrayList<>());
+
+            textEmptyRecipes.setText(
+                    "Could not load recipe suggestions."
+            );
+
+            textEmptyRecipes.setVisibility(View.VISIBLE);
+            recyclerRecipes.setVisibility(View.GONE);
+        }
+    }
+
+    private void showRecipeDetails(Recipe recipe) {
+        String instructions = recipe.getSteps();
+
+        if (instructions == null || instructions.trim().isEmpty()) {
+            instructions = "No cooking instructions are available.";
+        }
+
+        new AlertDialog.Builder(this)
+                .setTitle(recipe.getName())
+                .setMessage(instructions)
+                .setPositiveButton("Close", (dialog, which) ->
+                        dialog.dismiss()
+                )
+                .show();
+    }
+
     @Override
     protected void onResume() {
         super.onResume();
 
-        if (databaseHelper != null && pantryAdapter != null) {
+        if (databaseHelper != null
+                && pantryAdapter != null
+                && recipeAdapter != null) {
+
             loadPantryItems();
+            loadRecipeSuggestions();
         }
     }
 

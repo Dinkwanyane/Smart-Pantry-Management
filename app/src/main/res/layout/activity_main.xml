@@ -60,4 +60,32 @@
         android:clipToPadding="false"
         android:paddingBottom="8dp" />
 
+    <TextView
+        android:id="@+id/textRecipeSuggestionsTitle"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="12dp"
+        android:layout_marginBottom="8dp"
+        android:text="Suggested Recipes"
+        android:textColor="#0F172A"
+        android:textSize="22sp"
+        android:textStyle="bold" />
+
+    <TextView
+        android:id="@+id/textEmptyRecipes"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:padding="8dp"
+        android:text="No recipes match your pantry ingredients yet."
+        android:textColor="#64748B"
+        android:textSize="14sp"
+        android:visibility="gone" />
+
+    <androidx.recyclerview.widget.RecyclerView
+        android:id="@+id/recyclerRecipes"
+        android:layout_width="match_parent"
+        android:layout_height="180dp"
+        android:clipToPadding="false"
+        android:paddingBottom="8dp" />
+
 </LinearLayout>

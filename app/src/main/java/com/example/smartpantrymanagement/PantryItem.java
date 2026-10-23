@@ -1,3 +1,4 @@
+
 package com.example.smartpantrymanagement;
 
 public class PantryItem {
@@ -8,8 +9,13 @@ public class PantryItem {
     private final String unit;
     private final String expiryDate;
 
-    public PantryItem(int id, String name, double quantity,
-                      String unit, String expiryDate) {
+    public PantryItem(
+            int id,
+            String name,
+            double quantity,
+            String unit,
+            String expiryDate) {
+
         this.id = id;
         this.name = name;
         this.quantity = quantity;

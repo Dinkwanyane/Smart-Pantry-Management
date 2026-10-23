@@ -1,4 +1,3 @@
-
 package com.example.smartpantrymanagement;
 
 import android.view.LayoutInflater;
@@ -51,7 +50,8 @@ public class PantryAdapter
     @NonNull
     @Override
     public PantryViewHolder onCreateViewHolder(
-            @NonNull ViewGroup parent, int viewType) {
+            @NonNull ViewGroup parent,
+            int viewType) {
 
         View view = LayoutInflater.from(parent.getContext())
                 .inflate(R.layout.item_pantry, parent, false);
@@ -61,7 +61,8 @@ public class PantryAdapter
 
     @Override
     public void onBindViewHolder(
-            @NonNull PantryViewHolder holder, int position) {
+            @NonNull PantryViewHolder holder,
+            int position) {
 
         PantryItem item = pantryItems.get(position);
 
@@ -107,6 +108,7 @@ public class PantryAdapter
         TextView textItemName;
         TextView textItemQuantity;
         TextView textItemExpiry;
+
         Button buttonEditIngredient;
         Button buttonDeleteIngredient;
 
