@@ -1,10 +1,10 @@
-
 package com.example.smartpantrymanagement;
 
 import android.database.Cursor;
-import android.database.sqlite.SQLiteDatabase;
 import android.os.Bundle;
 import android.util.Log;
+import android.view.View;
+import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.activity.EdgeToEdge;
@@ -12,12 +12,20 @@ import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.graphics.Insets;
 import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowInsetsCompat;
+import androidx.recyclerview.widget.LinearLayoutManager;
+import androidx.recyclerview.widget.RecyclerView;
+
+import java.util.ArrayList;
+import java.util.List;
 
 public class MainActivity extends AppCompatActivity {
 
     private static final String TAG = "PANTRY_DB";
 
     private DatabaseHelper databaseHelper;
+    private PantryAdapter pantryAdapter;
+    private RecyclerView recyclerPantry;
+    private TextView textEmptyPantry;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -26,98 +34,111 @@ public class MainActivity extends AppCompatActivity {
         EdgeToEdge.enable(this);
         setContentView(R.layout.activity_main);
 
-        // Apply system bar insets.
+        View mainView = findViewById(R.id.main);
+
+        final int initialLeft = mainView.getPaddingLeft();
+        final int initialTop = mainView.getPaddingTop();
+        final int initialRight = mainView.getPaddingRight();
+        final int initialBottom = mainView.getPaddingBottom();
+
         ViewCompat.setOnApplyWindowInsetsListener(
-                findViewById(R.id.main), (view, insets) -> {
+                mainView, (view, insets) -> {
 
                     Insets systemBars = insets.getInsets(
-                            WindowInsetsCompat.Type.systemBars());
+                            WindowInsetsCompat.Type.systemBars()
+                                    | WindowInsetsCompat.Type.displayCutout());
 
                     view.setPadding(
-                            systemBars.left,
-                            systemBars.top,
-                            systemBars.right,
-                            systemBars.bottom);
+                            initialLeft + systemBars.left,
+                            initialTop + systemBars.top,
+                            initialRight + systemBars.right,
+                            initialBottom + systemBars.bottom);
 
                     return insets;
                 });
 
-        // Initialize the database helper ONCE.
+
+        // Find the views from activity_main.xml.
+        recyclerPantry = findViewById(R.id.recyclerPantry);
+        textEmptyPantry = findViewById(R.id.textEmptyPantry);
+
+        // Configure the RecyclerView.
+        recyclerPantry.setLayoutManager(
+                new LinearLayoutManager(this));
+
+        pantryAdapter = new PantryAdapter();
+        recyclerPantry.setAdapter(pantryAdapter);
+
+        // Initialize the database.
         databaseHelper = new DatabaseHelper(this);
 
-        try {
-            // Open or create the SQLite database.
-            SQLiteDatabase db =
-                    databaseHelper.getWritableDatabase();
+        // Load the saved ingredients.
+        loadPantryItems();
+    }
 
-            Log.d(TAG, "Database opened successfully.");
-            Log.d(TAG, "Database location: " + db.getPath());
+    private void loadPantryItems() {
 
-            // Check saved record counts.
-            int recipeCount = databaseHelper.getRecipeCount();
-            int requirementCount =
-                    databaseHelper.getRecipeIngredientCount();
-            int pantryCount = databaseHelper.getPantryItemCount();
+        List<PantryItem> items = new ArrayList<>();
 
-            Log.d(TAG, "Recipes: " + recipeCount);
-            Log.d(TAG, "Ingredient requirements: "
-                    + requirementCount);
-            Log.d(TAG, "Pantry items: " + pantryCount);
+        try (Cursor cursor = databaseHelper.getAllPantryItems()) {
 
-            Toast.makeText(
-                    this,
-                    "Recipes: " + recipeCount
-                            + "\nRequirements: " + requirementCount,
-                    Toast.LENGTH_LONG
-            ).show();
+            while (cursor.moveToNext()) {
 
-            // Display every recipe and its required ingredients.
-            try (Cursor recipes = databaseHelper.getAllRecipes()) {
+                int id = cursor.getInt(
+                        cursor.getColumnIndexOrThrow("id"));
 
-                while (recipes.moveToNext()) {
+                String name = cursor.getString(
+                        cursor.getColumnIndexOrThrow("name"));
 
-                    int recipeId = recipes.getInt(
-                            recipes.getColumnIndexOrThrow("id"));
+                double quantity = cursor.getDouble(
+                        cursor.getColumnIndexOrThrow("quantity"));
 
-                    String recipeName = recipes.getString(
-                            recipes.getColumnIndexOrThrow("name"));
+                String unit = cursor.getString(
+                        cursor.getColumnIndexOrThrow("unit"));
 
-                    Log.d(TAG, "Recipe: " + recipeName
-                            + ", ID: " + recipeId);
+                String expiryDate = cursor.getString(
+                        cursor.getColumnIndexOrThrow("expiry_date"));
 
-                    try (Cursor ingredients =
-                                 databaseHelper.getIngredientsForRecipe(
-                                         recipeId)) {
+                PantryItem item = new PantryItem(
+                        id, name, quantity, unit, expiryDate);
 
-                        while (ingredients.moveToNext()) {
-
-                            String name = ingredients.getString(
-                                    ingredients.getColumnIndexOrThrow(
-                                            "name"));
-
-                            double quantity = ingredients.getDouble(
-                                    ingredients.getColumnIndexOrThrow(
-                                            "quantity"));
-
-                            String unit = ingredients.getString(
-                                    ingredients.getColumnIndexOrThrow(
-                                            "unit"));
-
-                            Log.d(TAG, "  Required: " + name
-                                    + ", " + quantity + " " + unit);
-                        }
-                    }
-                }
+                items.add(item);
             }
 
         } catch (Exception e) {
-            Log.e(TAG, "Failed to initialize or read the database.", e);
+            Log.e(TAG, "Could not load pantry items.", e);
 
             Toast.makeText(
                     this,
-                    "Database error. Check Logcat.",
+                    "Could not load pantry items.",
                     Toast.LENGTH_LONG
             ).show();
+
+            return;
+        }
+
+        // Send the data to the adapter.
+        pantryAdapter.setPantryItems(items);
+
+        // Show a message when the pantry has no items.
+        if (items.isEmpty()) {
+            textEmptyPantry.setVisibility(View.VISIBLE);
+            recyclerPantry.setVisibility(View.GONE);
+        } else {
+            textEmptyPantry.setVisibility(View.GONE);
+            recyclerPantry.setVisibility(View.VISIBLE);
+        }
+
+        Log.d(TAG, "Pantry items displayed: " + items.size());
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+
+        // Refresh the list whenever the screen becomes active.
+        if (databaseHelper != null && pantryAdapter != null) {
+            loadPantryItems();
         }
     }
 
