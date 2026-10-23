@@ -41,6 +41,14 @@ public class MainActivity extends AppCompatActivity {
         EdgeToEdge.enable(this);
         setContentView(R.layout.activity_main);
 
+        Button settingsButton = findViewById(R.id.buttonSettings);
+
+        settingsButton.setOnClickListener(view -> {
+            Intent intent = new Intent(MainActivity.this, SettingsActivity.class);
+            startActivity(intent);
+        });
+
+
         View mainView = findViewById(R.id.main);
 
         if (mainView != null) {
