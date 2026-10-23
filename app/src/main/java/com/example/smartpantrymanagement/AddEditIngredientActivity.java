@@ -9,6 +9,7 @@ import android.widget.Toast;
 import androidx.appcompat.app.AppCompatActivity;
 
 import java.util.Calendar;
+import java.util.Locale;
 
 public class AddEditIngredientActivity extends AppCompatActivity {
 
@@ -18,48 +19,87 @@ public class AddEditIngredientActivity extends AppCompatActivity {
     private EditText editExpiryDate;
     private Button buttonSave;
 
+    private DatabaseHelper databaseHelper;
+    private int itemId = -1;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_add_edit_ingredient);
 
-        // Connect Java variables to the XML input fields.
         editName = findViewById(R.id.editName);
         editQuantity = findViewById(R.id.editQuantity);
         editUnit = findViewById(R.id.editUnit);
         editExpiryDate = findViewById(R.id.editExpiryDate);
         buttonSave = findViewById(R.id.buttonSave);
 
-        // Open the date picker when the expiry field is tapped.
+        databaseHelper = new DatabaseHelper(this);
+
         editExpiryDate.setFocusable(false);
+        editExpiryDate.setClickable(true);
         editExpiryDate.setOnClickListener(v -> showDatePicker());
 
-        // Validate and save when the user taps Save.
+        itemId = getIntent().getIntExtra("ITEM_ID", -1);
+
+        if (itemId == -1) {
+            setTitle("Add Ingredient");
+            buttonSave.setText("Save Ingredient");
+        } else {
+            setTitle("Edit Ingredient");
+            buttonSave.setText("Update Ingredient");
+            loadIngredient();
+        }
+
         buttonSave.setOnClickListener(v -> saveIngredient());
     }
 
     private void showDatePicker() {
         Calendar calendar = Calendar.getInstance();
 
-        DatePickerDialog datePicker = new DatePickerDialog(
+        DatePickerDialog datePickerDialog = new DatePickerDialog(
                 this,
                 (view, year, month, dayOfMonth) -> {
-                    String date = String.format(
-                            java.util.Locale.getDefault(),
+                    String selectedDate = String.format(
+                            Locale.US,
                             "%04d-%02d-%02d",
                             year,
                             month + 1,
                             dayOfMonth
                     );
 
-                    editExpiryDate.setText(date);
+                    editExpiryDate.setText(selectedDate);
                 },
                 calendar.get(Calendar.YEAR),
                 calendar.get(Calendar.MONTH),
                 calendar.get(Calendar.DAY_OF_MONTH)
         );
 
-        datePicker.show();
+        datePickerDialog.show();
+    }
+
+    private void loadIngredient() {
+        PantryItem item = databaseHelper.getPantryItem(itemId);
+
+        if (item == null) {
+            Toast.makeText(
+                    this,
+                    "Ingredient could not be found.",
+                    Toast.LENGTH_LONG
+            ).show();
+
+            finish();
+            return;
+        }
+
+        editName.setText(item.getName());
+        editQuantity.setText(String.valueOf(item.getQuantity()));
+        editUnit.setText(item.getUnit());
+
+        if (item.getExpiryDate() != null) {
+            editExpiryDate.setText(item.getExpiryDate());
+        } else {
+            editExpiryDate.setText("");
+        }
     }
 
     private void saveIngredient() {
@@ -70,109 +110,95 @@ public class AddEditIngredientActivity extends AppCompatActivity {
         String expiryDate =
                 editExpiryDate.getText().toString().trim();
 
-        // 1. Validate required fields.
-        if (name.isEmpty()
-                || quantityText.isEmpty()
-                || unit.isEmpty()) {
-            Toast.makeText(
-                    this,
-                    "Please complete all required fields",
-                    Toast.LENGTH_SHORT
-            ).show();
+        if (name.isEmpty()) {
+            editName.setError("Enter an ingredient name.");
+            editName.requestFocus();
             return;
         }
 
-        // 2. Convert quantity to a decimal number.
+        if (quantityText.isEmpty()) {
+            editQuantity.setError("Enter a quantity.");
+            editQuantity.requestFocus();
+            return;
+        }
+
+        if (unit.isEmpty()) {
+            editUnit.setError("Enter a unit.");
+            editUnit.requestFocus();
+            return;
+        }
+
         double quantity;
 
         try {
             quantity = Double.parseDouble(quantityText);
         } catch (NumberFormatException e) {
-            editQuantity.setError("Enter a valid quantity");
+            editQuantity.setError("Enter a valid number.");
             editQuantity.requestFocus();
             return;
         }
 
-        // 3. Reject invalid quantities.
         if (!Double.isFinite(quantity) || quantity <= 0) {
             editQuantity.setError(
-                    "Quantity must be greater than zero"
+                    "Quantity must be a number greater than zero."
             );
             editQuantity.requestFocus();
             return;
         }
 
-        // 4. Insert the validated ingredient into SQLite.
-        DatabaseHelper databaseHelper = new DatabaseHelper(this);
+        String savedExpiryDate =
+                expiryDate.isEmpty() ? null : expiryDate;
 
-        long result = databaseHelper.addPantryItem(
-                name,
-                quantity,
-                unit,
-                expiryDate.isEmpty() ? null : expiryDate
-        );
+        if (itemId == -1) {
+            long result = databaseHelper.addPantryItem(
+                    name, quantity, unit, savedExpiryDate
+            );
 
-        if (result != -1) {
-            Toast.makeText(
-                    this,
-                    "Ingredient saved successfully",
-                    Toast.LENGTH_SHORT
-            ).show();
+            if (result != -1) {
+                Toast.makeText(
+                        this,
+                        "Ingredient added successfully.",
+                        Toast.LENGTH_SHORT
+                ).show();
 
-            finish();
+                finish();
+            } else {
+                Toast.makeText(
+                        this,
+                        "Could not add the ingredient.",
+                        Toast.LENGTH_LONG
+                ).show();
+            }
+
         } else {
-            Toast.makeText(
-                    this,
-                    "Could not save ingredient. Please try again.",
-                    Toast.LENGTH_LONG
-            ).show();
+            int result = databaseHelper.updatePantryItem(
+                    itemId, name, quantity, unit, savedExpiryDate
+            );
+
+            if (result > 0) {
+                Toast.makeText(
+                        this,
+                        "Ingredient updated successfully.",
+                        Toast.LENGTH_SHORT
+                ).show();
+
+                finish();
+            } else {
+                Toast.makeText(
+                        this,
+                        "No changes were saved. The ingredient may no longer exist.",
+                        Toast.LENGTH_LONG
+                ).show();
+            }
         }
     }
 
-//    private void saveIngredient() {
-//        String name = editName.getText().toString().trim();
-//        String quantityText =
-//                editQuantity.getText().toString().trim();
-//        String unit = editUnit.getText().toString().trim();
-//        String expiryDate =
-//                editExpiryDate.getText().toString().trim();
-//
-//        // Check all required fields.
-//        if (name.isEmpty()
-//                || quantityText.isEmpty()
-//                || unit.isEmpty()) {
-//            Toast.makeText(
-//                    this,
-//                    "Please complete all required fields",
-//                    Toast.LENGTH_SHORT
-//            ).show();
-//            return;
-//        }
-//
-//        // Check that the quantity is a valid number.
-//        double quantity;
-//
-//        try {
-//            quantity = Double.parseDouble(quantityText);
-//        } catch (NumberFormatException e) {
-//            editQuantity.setError("Enter a valid quantity");
-//            editQuantity.requestFocus();
-//            return;
-//        }
-//
-//        // Reject zero, negative values and non-finite numbers.
-//        if (!Double.isFinite(quantity) || quantity <= 0) {
-//            editQuantity.setError(
-//                    "Quantity must be greater than zero"
-//            );
-//            editQuantity.requestFocus();
-//            return;
-//        }
-//
-//        // Database insertion will be added in Step 5.
-//        Toast.makeText(
-//                this,
-//                "Form validation successful",
-//                Toast.LENGTH_SHORT
-//        ).show();
+    @Override
+    protected void onDestroy() {
+        if (databaseHelper != null) {
+            databaseHelper.close();
+        }
+
+        super.onDestroy();
+    }
 }

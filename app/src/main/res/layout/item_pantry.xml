@@ -5,33 +5,57 @@
     android:orientation="vertical"
     android:padding="16dp"
     android:layout_marginBottom="8dp"
-    android:background="#F1F5F9">
+    android:background="#F2F2F2">
 
     <TextView
         android:id="@+id/textItemName"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:text="Ingredient name"
+        android:textColor="#222222"
         android:textSize="18sp"
-        android:textStyle="bold"
-        android:textColor="#1E293B" />
+        android:textStyle="bold" />
 
     <TextView
         android:id="@+id/textItemQuantity"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="4dp"
-        android:text="Quantity: 2 piece"
-        android:textSize="15sp"
-        android:textColor="#334155" />
+        android:layout_marginTop="6dp"
+        android:text="Quantity: 1 piece"
+        android:textColor="#444444"
+        android:textSize="15sp" />
 
     <TextView
         android:id="@+id/textItemExpiry"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginTop="4dp"
-        android:text="Expiry: Not specified"
-        android:textSize="14sp"
-        android:textColor="#64748B" />
+        android:text="Expiry date: Not provided"
+        android:textColor="#444444"
+        android:textSize="15sp" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="end"
+        android:layout_marginTop="10dp">
+
+        <Button
+            android:id="@+id/buttonEditIngredient"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Edit"
+            android:contentDescription="Edit ingredient" />
+
+        <Button
+            android:id="@+id/buttonDeleteIngredient"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="8dp"
+            android:text="Delete"
+            android:contentDescription="Delete ingredient" />
+
+    </LinearLayout>
 
 </LinearLayout>

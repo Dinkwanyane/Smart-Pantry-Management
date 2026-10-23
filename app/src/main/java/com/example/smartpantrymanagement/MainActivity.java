@@ -1,15 +1,16 @@
 package com.example.smartpantrymanagement;
 
+import android.content.Intent;
 import android.database.Cursor;
 import android.os.Bundle;
 import android.util.Log;
 import android.view.View;
+import android.widget.Button;
 import android.widget.TextView;
 import android.widget.Toast;
-import android.content.Intent;
-import android.widget.Button;
 
 import androidx.activity.EdgeToEdge;
+import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.graphics.Insets;
 import androidx.core.view.ViewCompat;
@@ -21,8 +22,6 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class MainActivity extends AppCompatActivity {
-
-    private static final String TAG = "PANTRY_DB";
 
     private DatabaseHelper databaseHelper;
     private PantryAdapter pantryAdapter;
@@ -36,8 +35,46 @@ public class MainActivity extends AppCompatActivity {
         EdgeToEdge.enable(this);
         setContentView(R.layout.activity_main);
 
+        View mainView = findViewById(R.id.main);
+
+        if (mainView != null) {
+            ViewCompat.setOnApplyWindowInsetsListener(
+                    mainView,
+                    (view, windowInsets) -> {
+                        Insets systemBars = windowInsets.getInsets(
+                                WindowInsetsCompat.Type.systemBars()
+                        );
+
+                        view.setPadding(
+                                systemBars.left + 16,
+                                systemBars.top + 16,
+                                systemBars.right + 16,
+                                systemBars.bottom + 16
+                        );
+
+                        return windowInsets;
+                    }
+            );
+        }
+
         Button buttonAddIngredient =
                 findViewById(R.id.buttonAddIngredient);
+
+        recyclerPantry = findViewById(R.id.recyclerPantry);
+        textEmptyPantry = findViewById(R.id.textEmptyPantry);
+
+        recyclerPantry.setLayoutManager(
+                new LinearLayoutManager(this)
+        );
+
+        pantryAdapter = new PantryAdapter(
+                this::openEditIngredient,
+                this::showDeleteConfirmation
+        );
+
+        recyclerPantry.setAdapter(pantryAdapter);
+
+        databaseHelper = new DatabaseHelper(this);
 
         buttonAddIngredient.setOnClickListener(v -> {
             Intent intent = new Intent(
@@ -48,110 +85,142 @@ public class MainActivity extends AppCompatActivity {
             startActivity(intent);
         });
 
-
-        View mainView = findViewById(R.id.main);
-
-        final int initialLeft = mainView.getPaddingLeft();
-        final int initialTop = mainView.getPaddingTop();
-        final int initialRight = mainView.getPaddingRight();
-        final int initialBottom = mainView.getPaddingBottom();
-
-        ViewCompat.setOnApplyWindowInsetsListener(
-                mainView, (view, insets) -> {
-
-                    Insets systemBars = insets.getInsets(
-                            WindowInsetsCompat.Type.systemBars()
-                                    | WindowInsetsCompat.Type.displayCutout());
-
-                    view.setPadding(
-                            initialLeft + systemBars.left,
-                            initialTop + systemBars.top,
-                            initialRight + systemBars.right,
-                            initialBottom + systemBars.bottom);
-
-                    return insets;
-                });
-
-
-        // Find the views from activity_main.xml.
-        recyclerPantry = findViewById(R.id.recyclerPantry);
-        textEmptyPantry = findViewById(R.id.textEmptyPantry);
-
-        // Configure the RecyclerView.
-        recyclerPantry.setLayoutManager(
-                new LinearLayoutManager(this));
-
-        pantryAdapter = new PantryAdapter();
-        recyclerPantry.setAdapter(pantryAdapter);
-
-        // Initialize the database.
-        databaseHelper = new DatabaseHelper(this);
-
-        // Load the saved ingredients.
         loadPantryItems();
     }
 
-    private void loadPantryItems() {
+    private void openEditIngredient(PantryItem item) {
+        Intent intent = new Intent(
+                MainActivity.this,
+                AddEditIngredientActivity.class
+        );
 
+        intent.putExtra("ITEM_ID", item.getId());
+
+        startActivity(intent);
+    }
+
+    private void showDeleteConfirmation(PantryItem item) {
+        new AlertDialog.Builder(this)
+                .setTitle("Delete Ingredient")
+                .setMessage(
+                        "Are you sure you want to delete \""
+                                + item.getName()
+                                + "\" from your pantry?"
+                )
+                .setPositiveButton("Delete", (dialog, which) -> {
+                    deleteIngredient(item);
+                })
+                .setNegativeButton("Cancel", (dialog, which) -> {
+                    dialog.dismiss();
+                })
+                .show();
+    }
+
+    private void deleteIngredient(PantryItem item) {
+        try {
+            int result = databaseHelper.deletePantryItem(
+                    item.getId()
+            );
+
+            if (result > 0) {
+                Toast.makeText(
+                        this,
+                        "Ingredient deleted successfully.",
+                        Toast.LENGTH_SHORT
+                ).show();
+
+                loadPantryItems();
+            } else {
+                Toast.makeText(
+                        this,
+                        "Ingredient could not be deleted.",
+                        Toast.LENGTH_LONG
+                ).show();
+            }
+
+        } catch (Exception e) {
+            Log.e(
+                    "MainActivity",
+                    "Error deleting ingredient",
+                    e
+            );
+
+            Toast.makeText(
+                    this,
+                    "An error occurred while deleting the ingredient.",
+                    Toast.LENGTH_LONG
+            ).show();
+        }
+    }
+
+    private void loadPantryItems() {
         List<PantryItem> items = new ArrayList<>();
 
         try (Cursor cursor = databaseHelper.getAllPantryItems()) {
 
             while (cursor.moveToNext()) {
-
                 int id = cursor.getInt(
-                        cursor.getColumnIndexOrThrow("id"));
+                        cursor.getColumnIndexOrThrow("id")
+                );
 
                 String name = cursor.getString(
-                        cursor.getColumnIndexOrThrow("name"));
+                        cursor.getColumnIndexOrThrow("name")
+                );
 
                 double quantity = cursor.getDouble(
-                        cursor.getColumnIndexOrThrow("quantity"));
+                        cursor.getColumnIndexOrThrow("quantity")
+                );
 
                 String unit = cursor.getString(
-                        cursor.getColumnIndexOrThrow("unit"));
+                        cursor.getColumnIndexOrThrow("unit")
+                );
 
                 String expiryDate = cursor.getString(
-                        cursor.getColumnIndexOrThrow("expiry_date"));
+                        cursor.getColumnIndexOrThrow("expiry_date")
+                );
 
                 PantryItem item = new PantryItem(
-                        id, name, quantity, unit, expiryDate);
+                        id,
+                        name,
+                        quantity,
+                        unit,
+                        expiryDate
+                );
 
                 items.add(item);
             }
 
+            pantryAdapter.setPantryItems(items);
+
+            boolean isEmpty = items.isEmpty();
+
+            textEmptyPantry.setVisibility(
+                    isEmpty ? View.VISIBLE : View.GONE
+            );
+
+            recyclerPantry.setVisibility(
+                    isEmpty ? View.GONE : View.VISIBLE
+            );
+
         } catch (Exception e) {
-            Log.e(TAG, "Could not load pantry items.", e);
+            Log.e(
+                    "MainActivity",
+                    "Error loading pantry items",
+                    e
+            );
 
             Toast.makeText(
                     this,
-                    "Could not load pantry items.",
+                    "Could not load pantry ingredients.",
                     Toast.LENGTH_LONG
             ).show();
-
-            return;
         }
-
-        // Send the data to the adapter.
-        pantryAdapter.setPantryItems(items);
-
-        // Show a message when the pantry has no items.
-        if (items.isEmpty()) {
-            textEmptyPantry.setVisibility(View.VISIBLE);
-            recyclerPantry.setVisibility(View.GONE);
-        } else {
-            textEmptyPantry.setVisibility(View.GONE);
-            recyclerPantry.setVisibility(View.VISIBLE);
-        }
-
-        Log.d(TAG, "Pantry items displayed: " + items.size());
     }
 
     @Override
     protected void onResume() {
         super.onResume();
 
-        // Refresh the list whenever the screen becomes active.
         if (databaseHelper != null && pantryAdapter != null) {
             loadPantryItems();
         }
