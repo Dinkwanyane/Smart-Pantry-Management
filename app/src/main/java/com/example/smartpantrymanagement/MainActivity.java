@@ -41,10 +41,27 @@ public class MainActivity extends AppCompatActivity {
         EdgeToEdge.enable(this);
         setContentView(R.layout.activity_main);
 
-        Button settingsButton = findViewById(R.id.buttonSettings);
+        Button suggestedRecipesButton =
+                findViewById(R.id.buttonSuggestedRecipes);
+
+        suggestedRecipesButton.setOnClickListener(view -> {
+            Intent intent = new Intent(
+                    MainActivity.this,
+                    SuggestedRecipesActivity.class
+            );
+
+            startActivity(intent);
+        });
+
+        Button settingsButton =
+                findViewById(R.id.buttonSettings);
 
         settingsButton.setOnClickListener(view -> {
-            Intent intent = new Intent(MainActivity.this, SettingsActivity.class);
+            Intent intent = new Intent(
+                    MainActivity.this,
+                    SettingsActivity.class
+            );
+
             startActivity(intent);
         });
 

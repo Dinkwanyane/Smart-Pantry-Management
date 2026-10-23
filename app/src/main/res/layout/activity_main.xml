@@ -38,6 +38,13 @@
         android:text="Settings"
         android:layout_marginTop="12dp" />
 
+    <Button
+        android:id="@+id/buttonSuggestedRecipes"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Suggested Recipes"
+        android:layout_marginTop="8dp" />
+
 
     <TextView
         android:id="@+id/textPantrySubtitle"
